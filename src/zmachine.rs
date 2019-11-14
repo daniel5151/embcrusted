@@ -62,10 +62,6 @@ impl BadHashMap {
         }
     }
 
-    fn len(&self) -> usize {
-        self.entries.len()
-    }
-
     fn insert(&mut self, nk: String, nv: usize) {
         for (k, v) in self.entries.iter_mut() {
             if k == &nk {
@@ -94,7 +90,6 @@ pub struct Zmachine<'a, U: Ui> {
     alphabet: [Vec<String>; 3],
     abbrev_table: usize,
     separators: Vec<char>,
-    dictionary: BadHashMap,
     frames: Vec<Frame>,
     initial_pc: usize,
     pc: usize,
@@ -135,7 +130,6 @@ impl<'a, U: Ui> Zmachine<'a, U> {
             alphabet,
             abbrev_table: memory.read_word(0x18) as usize,
             separators: Vec::new(),
-            dictionary: BadHashMap::new(),
             prop_defaults,
             obj_table_addr: prop_defaults + (if version <= 3 { 31 } else { 63 }) * 2,
             obj_size: if version <= 3 { 9 } else { 14 },
@@ -421,6 +415,7 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         length
     }
 
+    // MODIFICATION: only populates the separators.
     fn populate_dictionary(&mut self) {
         let dictionary_start = self.memory.read_word(0x08) as usize;
         let mut read = self.memory.get_reader(dictionary_start);
@@ -430,6 +425,18 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         for _ in 0..separator_count {
             self.separators.push(read.byte() as char);
         }
+    }
+
+    // MODIFICATION: doesn't use precomputed dictionary.
+    fn check_dict(&mut self, word: &str) -> usize {
+        let length = if self.version <= 3 { 6 } else { 9 };
+        let mut short_word = word.to_string();
+        short_word.truncate(length);
+
+        let dictionary_start = self.memory.read_word(0x08) as usize;
+        let mut read = self
+            .memory
+            .get_reader(dictionary_start + 1 + self.separators.len());
 
         let entry_length = read.byte() as usize;
         let entry_count = read.word() as usize;
@@ -439,19 +446,13 @@ impl<'a, U: Ui> Zmachine<'a, U> {
             let addr = entry_start + n * entry_length;
             let entry = self.read_zstring(addr);
 
-            self.dictionary.insert(entry, addr);
+            if entry == short_word {
+                return addr;
+            }
         }
-    }
 
-    fn check_dict(&mut self, word: &str) -> usize {
-        let length = if self.version <= 3 { 6 } else { 9 };
-        let mut short = word.to_string();
-        short.truncate(length);
-
-        match self.dictionary.get(&short) {
-            Some(addr) => *addr,
-            None => 0,
-        }
+        // not found
+        0
     }
 
     fn tokenise(&mut self, text: &str, parse_addr: usize) {
