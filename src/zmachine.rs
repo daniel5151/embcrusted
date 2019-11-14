@@ -1637,10 +1637,8 @@ impl<U: Ui> Zmachine<U> {
             max_length -= 1;
         }
 
-        let raw = self.ui.get_input_buf();
-        let input_len = raw.len();
-        let raw = &mut raw[..usize::min(max_length as usize, input_len)];
-        let raw = unsafe { str::from_utf8_unchecked(raw) };
+        let mut raw = self.ui.get_input_buf().to_string();
+        raw.truncate(max_length as usize);
 
         let input = raw.to_lowercase();
 
