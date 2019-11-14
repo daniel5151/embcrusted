@@ -1,4 +1,5 @@
-#[derive(Debug)]
+use alloc::vec::Vec;
+
 pub struct Frame {
     stack: Vec<u16>,
     locals: Vec<u16>,
@@ -37,19 +38,11 @@ impl Frame {
     pub fn read_local(&self, index: u8) -> u16 {
         let index = index as usize;
 
-        if index > self.locals.len() {
-            panic!("Trying to read out of bounds local @: {}", index);
-        }
-
         self.locals[index]
     }
 
     pub fn write_local(&mut self, index: u8, value: u16) {
         let index = index as usize;
-
-        if index > self.locals.len() {
-            panic!("Trying to write out of bounds local @: {}", index);
-        }
 
         self.locals[index] = value;
     }
@@ -59,10 +52,10 @@ impl Frame {
     }
 
     pub fn stack_pop(&mut self) -> u16 {
-        self.stack.pop().expect("Can't pop off an empty stack!")
+        self.stack.pop().unwrap()
     }
 
     pub fn stack_peek(&self) -> u16 {
-        *self.stack.last().expect("Can't peek on an empty stack!")
+        *self.stack.last().unwrap()
     }
 }

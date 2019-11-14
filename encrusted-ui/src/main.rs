@@ -37,12 +37,39 @@ fn main() {
     }
 
     let opts = Options { rand_seed: 0x1337 };
-    let mut zvm = Zmachine::new(data, DumbUi, opts);
+    let mut zvm = Zmachine::new(data, DumbUi::default(), opts);
 
-    zvm.run();
+    while !zvm.step() {
+        zvm.ui.fill_input_buf();
+        zvm.ack_input();
+    }
 }
 
-pub struct DumbUi;
+pub struct DumbUi {
+    len: usize,
+    buf: [u8; 64],
+}
+impl Default for DumbUi {
+    fn default() -> DumbUi {
+        DumbUi {
+            len: 0,
+            buf: [0; 64],
+        }
+    }
+}
+
+impl DumbUi {
+    fn fill_input_buf(&mut self) {
+        let mut input = String::new();
+        io::stdin()
+            .read_line(&mut input)
+            .expect("Error reading input");
+        let s = input.trim().to_string();
+
+        self.len = s.len();
+        self.buf[..s.len()].copy_from_slice(s.as_ref());
+    }
+}
 
 impl Ui for DumbUi {
     fn print(&self, text: &str) {
@@ -60,15 +87,7 @@ impl Ui for DumbUi {
         // self.print(&format!("{}  -  {}", left, right));
     }
 
-    fn get_user_input(&self) -> String {
-        let mut input = String::new();
-        io::stdin()
-            .read_line(&mut input)
-            .expect("Error reading input");
-        input.trim().to_string()
-    }
-
-    fn reset(&self) {
-        println!();
+    fn get_input_buf(&mut self) -> &mut [u8] {
+        &mut self.buf[..self.len]
     }
 }

@@ -1,4 +1,5 @@
-#[derive(Debug)]
+use alloc::vec::Vec;
+
 pub struct Reader<'a> {
     buffer: &'a Buffer,
     cursor: usize,
@@ -22,7 +23,6 @@ impl<'a> Reader<'a> {
     }
 }
 
-#[derive(Debug)]
 pub struct Writer<'a> {
     buffer: &'a mut Buffer,
     cursor: usize,
@@ -40,7 +40,6 @@ impl<'a> Writer<'a> {
     }
 }
 
-#[derive(Debug)]
 pub struct Buffer {
     buf: Vec<u8>,
 }

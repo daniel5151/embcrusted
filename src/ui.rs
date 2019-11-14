@@ -5,6 +5,5 @@ pub trait Ui {
     fn clear(&self);
     fn set_status_bar(&self, left: &str, right: &str);
 
-    fn get_user_input(&self) -> String;
-    fn reset(&self);
+    fn get_input_buf(&mut self) -> &mut [u8];
 }

@@ -9,12 +9,17 @@ readme = "README.md"
 license = "MIT"
 
 [profile.release]
+codegen-units = 1
+debug = false
+debug-assertions = false
+incremental = false
 lto = true
 opt-level = 's'
+overflow-checks = false
+panic = "abort"
+rpath = false
 
 [dependencies]
-enum_primitive = "0.1.1"
-hashbrown = "0.6.3"
 
 [workspace]
 members = ["encrusted-ui"]

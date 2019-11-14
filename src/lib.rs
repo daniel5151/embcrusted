@@ -1,13 +1,15 @@
-#[macro_use]
-extern crate enum_primitive;
+#![no_std]
+extern crate alloc;
 
 mod buffer;
 mod frame;
 mod instruction;
-mod options;
 mod ui;
 mod zmachine;
 
-pub use options::Options;
 pub use ui::Ui;
 pub use zmachine::Zmachine;
+
+pub struct Options {
+    pub rand_seed: usize,
+}

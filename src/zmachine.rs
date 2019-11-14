@@ -1,16 +1,16 @@
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
 use core::str;
-
-use enum_primitive::FromPrimitive;
-use hashbrown::HashMap;
 
 use crate::buffer::Buffer;
 use crate::frame::Frame;
 use crate::instruction::{Branch, Instruction, Opcode, Operand, OperandType};
 
-use crate::options::Options;
 use crate::ui::Ui;
+use crate::Options;
 
-#[derive(Debug)]
 enum ZStringState {
     Alphabet(usize),
     Abbrev(u8),
@@ -18,7 +18,6 @@ enum ZStringState {
     Tenbit2(u8),
 }
 
-#[derive(Debug)]
 struct ObjectProperty {
     num: u8,
     len: u8,
@@ -52,10 +51,38 @@ impl MicroRng {
     }
 }
 
+struct BadHashMap {
+    entries: Vec<(String, usize)>,
+}
+
+impl BadHashMap {
+    fn new() -> BadHashMap {
+        BadHashMap {
+            entries: Vec::new(),
+        }
+    }
+
+    fn insert(&mut self, nk: String, nv: usize) {
+        for (k, v) in self.entries.iter_mut() {
+            if k == &nk {
+                *v = nv;
+                return;
+            }
+        }
+        self.entries.push((nk, nv))
+    }
+
+    fn get(&mut self, nk: &str) -> Option<&mut usize> {
+        self.entries
+            .iter_mut()
+            .find(|(k, _)| k == nk)
+            .map(|(_, v)| v)
+    }
+}
+
 pub struct Zmachine<U: Ui> {
     pub ui: U,
     pub options: Options,
-    pub instr_log: String,
     version: u8,
     memory: Buffer,
     original_dynamic: Vec<u8>,
@@ -64,7 +91,7 @@ pub struct Zmachine<U: Ui> {
     alphabet: [Vec<String>; 3],
     abbrev_table: usize,
     separators: Vec<char>,
-    dictionary: HashMap<String, usize>,
+    dictionary: BadHashMap,
     frames: Vec<Frame>,
     initial_pc: usize,
     pc: usize,
@@ -95,7 +122,6 @@ impl<U: Ui> Zmachine<U> {
         let mut zvm = Zmachine {
             version,
             ui,
-            instr_log: String::new(),
             original_dynamic: memory.slice(0, static_start).to_vec(),
             globals_addr: memory.read_word(0x0C) as usize,
             routine_offset: memory.read_word(0x28) as usize,
@@ -106,7 +132,7 @@ impl<U: Ui> Zmachine<U> {
             alphabet,
             abbrev_table: memory.read_word(0x18) as usize,
             separators: Vec::new(),
-            dictionary: HashMap::new(),
+            dictionary: BadHashMap::new(),
             prop_defaults,
             obj_table_addr: prop_defaults + (if version <= 3 { 31 } else { 63 }) * 2,
             obj_size: if version <= 3 { 9 } else { 14 },
@@ -161,18 +187,16 @@ impl<U: Ui> Zmachine<U> {
         } else {
             let A0 = format!(
                 " .....{}",
-                str::from_utf8(memory.read(alphabet_addr, 26)).expect("bad alphabet table A0!")
+                str::from_utf8(memory.read(alphabet_addr, 26)).unwrap()
             );
             let A1 = format!(
                 " .....{}",
-                str::from_utf8(memory.read(alphabet_addr + 26, 26))
-                    .expect("bad alphabet table A1!")
+                str::from_utf8(memory.read(alphabet_addr + 26, 26)).unwrap()
             );
             // First two characters are ignored and accounted for in our padding.
             let A2 = format!(
                 " ......\n{}",
-                str::from_utf8(memory.read(alphabet_addr + 26 + 26 + 2, 24))
-                    .expect("Bad alphabet table A2!")
+                str::from_utf8(memory.read(alphabet_addr + 26 + 26 + 2, 24)).unwrap()
             );
 
             [
@@ -210,7 +234,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn read_global(&self, index: u8) -> u16 {
         if index > 240 {
-            panic!("Can't read global{}!", index);
+            panic!();
         }
 
         let addr = self.globals_addr + index as usize * 2;
@@ -219,7 +243,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn write_global(&mut self, index: u8, value: u16) {
         if index > 240 {
-            panic!("Can't write global{}!", index);
+            panic!();
         }
 
         let addr = self.globals_addr + index as usize * 2;
@@ -227,38 +251,23 @@ impl<U: Ui> Zmachine<U> {
     }
 
     fn read_local(&self, index: u8) -> u16 {
-        self.frames
-            .last()
-            .expect("Can't write local, no frames!")
-            .read_local(index)
+        self.frames.last().unwrap().read_local(index)
     }
 
     fn write_local(&mut self, index: u8, value: u16) {
-        self.frames
-            .last_mut()
-            .expect("Can't write local, no frames!")
-            .write_local(index, value);
+        self.frames.last_mut().unwrap().write_local(index, value);
     }
 
     fn stack_push(&mut self, value: u16) {
-        self.frames
-            .last_mut()
-            .expect("Can't push to stack, no frames!")
-            .stack_push(value);
+        self.frames.last_mut().unwrap().stack_push(value);
     }
 
     fn stack_pop(&mut self) -> u16 {
-        self.frames
-            .last_mut()
-            .expect("Can't pop stack, no frames!")
-            .stack_pop()
+        self.frames.last_mut().unwrap().stack_pop()
     }
 
     fn stack_peek(&mut self) -> u16 {
-        self.frames
-            .last_mut()
-            .expect("Can't peek stack, no frames!")
-            .stack_peek()
+        self.frames.last_mut().unwrap().stack_peek()
     }
 
     fn read_variable(&mut self, index: u8) -> u16 {
@@ -306,7 +315,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn get_abbrev(&self, index: u8) -> String {
         if index > 96 {
-            panic!("Bad abbrev index: {}", index);
+            panic!();
         }
 
         let offset = 2 * index as usize;
@@ -431,7 +440,7 @@ impl<U: Ui> Zmachine<U> {
         }
     }
 
-    fn check_dict(&self, word: &str) -> usize {
+    fn check_dict(&mut self, word: &str) -> usize {
         let length = if self.version <= 3 { 6 } else { 9 };
         let mut short = word.to_string();
         short.truncate(length);
@@ -446,7 +455,7 @@ impl<U: Ui> Zmachine<U> {
         // v1-4 start storing @ byte 1, v5+ start @2;
         let start = if self.version <= 4 { 1 } else { 2 };
         let mut input = String::from(text);
-        let mut found = HashMap::new();
+        let mut found = BadHashMap::new();
 
         for sep in &self.separators {
             input = input.replace(&sep.to_string(), &format!(" {} ", sep))
@@ -456,7 +465,13 @@ impl<U: Ui> Zmachine<U> {
             .split_whitespace()
             .filter(|token| !token.is_empty())
             .map(|token| {
-                let offset = found.entry(token).or_insert(0);
+                let offset = match found.get(token) {
+                    Some(x) => x,
+                    None => {
+                        found.insert(token.to_string(), 0);
+                        found.get(token).unwrap()
+                    }
+                };
                 let position = text[*offset..].find(token).unwrap();
 
                 let dict_addr = self.check_dict(token);
@@ -643,7 +658,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn test_attr(&self, object: u16, attr: u16) -> u16 {
         if attr as usize > self.attr_width * 8 {
-            panic!("Can't test out-of-bounds attribute: {}", attr);
+            panic!();
         }
 
         let addr = self.get_object_addr(object) + attr as usize / 8;
@@ -659,7 +674,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn set_attr(&mut self, object: u16, attr: u16) {
         if attr as usize > self.attr_width * 8 {
-            panic!("Can't set out-of-bounds attribute: {}", attr);
+            panic!();
         }
 
         let addr = self.get_object_addr(object) + attr as usize / 8;
@@ -671,7 +686,7 @@ impl<U: Ui> Zmachine<U> {
 
     fn clear_attr(&mut self, object: u16, attr: u16) {
         if attr as usize > self.attr_width * 8 {
-            panic!("Can't clear out-of-bounds attribute: {}", attr);
+            panic!();
         }
 
         let addr = self.get_object_addr(object) + attr as usize / 8;
@@ -881,7 +896,7 @@ impl<U: Ui> Zmachine<U> {
     }
 
     fn return_from_routine(&mut self, value: u16) {
-        let frame = self.frames.pop().expect("Can't pop off last frame!");
+        let frame = self.frames.pop().unwrap();
         self.pc = frame.resume;
 
         if let Some(index) = frame.store {
@@ -937,7 +952,7 @@ impl<U: Ui> Zmachine<U> {
 
             match Opcode::from_u16(num) {
                 Some(val) => val,
-                None => panic!("Opcode not found: {:?}", num),
+                None => panic!(),
             }
         };
 
@@ -1021,29 +1036,27 @@ impl<U: Ui> Zmachine<U> {
             None
         };
 
-        let text = if Instruction::does_text(opcode) {
-            Some(self.read_zstring(read.position()))
+        let text_position = if Instruction::does_text(opcode) {
+            Some(read.position())
         } else {
             None
         };
 
-        let text_length = if text.is_some() {
+        let text_length = if Instruction::does_text(opcode) {
             self.zstring_length(read.position())
         } else {
             0
         };
 
-        let name = Instruction::name(opcode, self.version);
         let next = read.position() + text_length;
 
         Instruction {
             addr,
             opcode,
-            name,
             operands,
             store,
             branch,
-            text,
+            text_position,
             next,
         }
     }
@@ -1136,7 +1149,7 @@ impl<U: Ui> Zmachine<U> {
             (VAR_225, &[array, index, value]) => self.do_storew(array, index, value),
             (VAR_226, &[array, index, value]) => self.do_storeb(array, index, value),
             (VAR_227, &[obj, prop, value]) => self.do_put_prop(obj, prop, value),
-            (VAR_228, &[text, parse]) => self.do_sread(text, parse),
+            (VAR_228, &[text, parse]) => self.do_sread(text, parse), // handled via handle_input
             (VAR_229, &[chr]) => self.do_print_char(chr),
             (VAR_230, &[num]) => self.do_print_num(num),
             (VAR_232, &[value]) => self.do_push(value),
@@ -1151,10 +1164,7 @@ impl<U: Ui> Zmachine<U> {
             // these might be present in some v3 games but aren't implemented yet
             (VAR_243, _) | (VAR_244, _) | (VAR_245, _) => (),
 
-            _ => panic!(
-                "\n\nOpcode not yet implemented: {} ({:?}) @ {:#04x}\n\n",
-                instr.name, instr.opcode, self.pc
-            ),
+            _ => panic!(),
         }
 
         // advance pc to the next instruction
@@ -1164,52 +1174,18 @@ impl<U: Ui> Zmachine<U> {
         }
     }
 
-    // Terminal UI only
-    #[allow(dead_code)]
-    pub fn run(&mut self) {
-        self.ui.clear();
-
-        // continue instructions until the quit instruction
-        loop {
-            let instr = self.decode_instruction(self.pc);
-
-            if instr.opcode == Opcode::OP0_186 {
-                break;
-            }
-
-            self.handle_instruction(&instr);
-        }
-
-        self.ui.reset();
-    }
-
-    // Web UI only
-    #[allow(dead_code)]
+    /// loop through instructions until user input is needed
+    /// false == read required, true == machine is done.
     pub fn step(&mut self) -> bool {
-        // loop through instructions until user input is needed
-        // (saves/restores need a save name, read instructions need user input)
-        // Pauses on these instructions and control is passed back to js
         loop {
             let instr = self.decode_instruction(self.pc);
 
             match instr.opcode {
-                // SAVE
-                Opcode::OP0_181 => {
-                    // Advance the pc, assuming that the save was successful
-                    self.process_save_result(&instr);
-                }
-                // RESTORE (breaks loop)
-                Opcode::OP0_182 => {
-                    self.paused_instr = Some(instr);
-                    return false;
-                }
-                // QUIT (breaks loop)
+                // QUIT
                 Opcode::OP0_186 => {
-                    // undo 2x - get to the savestate right before the
-                    // "are you sure?" dialog box that usually shows up:
                     return true; // done == true
                 }
-                // READ (breaks loop)
+                // READ
                 Opcode::VAR_228 => {
                     self.paused_instr = Some(instr);
                     return false;
@@ -1221,18 +1197,13 @@ impl<U: Ui> Zmachine<U> {
         }
     }
 
-    // Web UI only - gives user input to the paused read instruction
-    // (passes control back JS afterwards)
-    #[allow(dead_code)]
-    pub fn handle_input(&mut self, input: String) {
-        let instr = self
-            .paused_instr
-            .take()
-            .expect("Can't handle input, no paused instruction to resume");
+    /// Should be called once input is handled
+    pub fn ack_input(&mut self) {
+        let instr = self.paused_instr.take().unwrap();
 
         // explicitly handle read (need to get args first)
         let args = self.get_arguments(instr.operands.as_slice());
-        self.do_sread_second(args[0], args[1], input);
+        self.do_sread(args[0], args[1]);
         self.pc = instr.next;
     }
 }
@@ -1509,14 +1480,14 @@ impl<U: Ui> Zmachine<U> {
 
     // OP0_178
     fn do_print(&mut self, instr: &Instruction) {
-        let text = instr.text.as_ref().expect("Can't print with no text!");
-        self.ui.print(text);
+        let text = self.read_zstring(instr.text_position.unwrap());
+        self.ui.print(&text);
     }
 
     // OP0_179
     fn do_print_ret(&mut self, instr: &Instruction) {
-        let text = instr.text.as_ref().expect("Can't print with no text!");
-        self.ui.print(text);
+        let text = self.read_zstring(instr.text_position.unwrap());
+        self.ui.print(&text);
         self.ui.print("\n");
         self.return_from_routine(1);
     }
@@ -1655,18 +1626,8 @@ impl<U: Ui> Zmachine<U> {
     }
 
     // VAR_228
+    // reads data from ui buffer
     fn do_sread(&mut self, text_addr: u16, parse_addr: u16) {
-        // need to update the status bar before each read
-        self.update_status_bar();
-        // add extra space so it doesn't look janky (non-spec)
-        self.ui.print(" ");
-
-        let input = self.ui.get_user_input();
-
-        self.do_sread_second(text_addr, parse_addr, input);
-    }
-
-    fn do_sread_second(&mut self, text_addr: u16, parse_addr: u16, mut raw: String) {
         let text_addr = text_addr as usize;
         let parse_addr = parse_addr as usize;
 
@@ -1676,8 +1637,12 @@ impl<U: Ui> Zmachine<U> {
             max_length -= 1;
         }
 
-        raw.truncate(max_length as usize);
-        let input = &raw.to_lowercase();
+        let raw = self.ui.get_input_buf();
+        let input_len = raw.len();
+        let raw = &mut raw[..usize::min(max_length as usize, input_len)];
+        let raw = unsafe { str::from_utf8_unchecked(raw) };
+
+        let input = raw.to_lowercase();
 
         let bytes = input.as_bytes();
         let len = bytes.len();
@@ -1694,13 +1659,15 @@ impl<U: Ui> Zmachine<U> {
 
         // skip tokenization step if parse_addr is 0
         if parse_addr != 0 {
-            self.tokenise(input, parse_addr);
+            self.tokenise(&input, parse_addr);
         }
     }
 
     // VAR_229
     fn do_print_char(&mut self, chr: u16) {
-        self.ui.print(&(chr as u8 as char).to_string());
+        let c = [chr as u8];
+        let c = unsafe { str::from_utf8_unchecked(&c) };
+        self.ui.print(&c);
     }
 
     // VAR_230
@@ -1739,12 +1706,7 @@ impl<U: Ui> Zmachine<U> {
 
     // VAR_255
     fn do_check_arg_count(&self, num: u16) -> u16 {
-        let count = u16::from(
-            self.frames
-                .last()
-                .expect("Can't check arg count, no frames!")
-                .arg_count,
-        );
+        let count = u16::from(self.frames.last().unwrap().arg_count);
 
         if count >= num {
             1
@@ -1754,6 +1716,7 @@ impl<U: Ui> Zmachine<U> {
     }
 
     // EXT_1002
+    #[allow(clippy::comparison_chain)]
     fn do_log_shift(&mut self, number: u16, places: u16) -> u16 {
         let number = number as u32;
         let places = places as i16;
@@ -1768,6 +1731,7 @@ impl<U: Ui> Zmachine<U> {
     }
 
     // EXT_1003
+    #[allow(clippy::comparison_chain)]
     fn do_art_shift(&mut self, number: u16, places: u16) -> u16 {
         let mut number = (number as i16) as i32;
         let places = places as i16;
