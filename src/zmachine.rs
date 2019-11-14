@@ -62,6 +62,10 @@ impl BadHashMap {
         }
     }
 
+    fn len(&self) -> usize {
+        self.entries.len()
+    }
+
     fn insert(&mut self, nk: String, nv: usize) {
         for (k, v) in self.entries.iter_mut() {
             if k == &nk {
@@ -80,12 +84,11 @@ impl BadHashMap {
     }
 }
 
-pub struct Zmachine<U: Ui> {
+pub struct Zmachine<'a, U: Ui> {
     pub ui: U,
     pub options: Options,
     version: u8,
-    memory: Buffer,
-    original_dynamic: Vec<u8>,
+    memory: Buffer<'a>,
     routine_offset: usize,
     string_offset: usize,
     alphabet: [Vec<String>; 3],
@@ -104,14 +107,15 @@ pub struct Zmachine<U: Ui> {
     rng: MicroRng,
 }
 
-impl<U: Ui> Zmachine<U> {
-    pub fn new(data: Vec<u8>, ui: U, options: Options) -> Zmachine<U> {
-        let memory = Buffer::new(data);
+impl<'a, U: Ui> Zmachine<'a, U> {
+    pub fn new(data: &'a [u8], ui: U, options: Options) -> Zmachine<'a, U> {
+        let static_start = ((data[0x0E] as usize) << 8) + (data[0x0F] as usize);
+
+        let memory = Buffer::new(data, static_start);
 
         let version = memory.read_byte(0x00);
         let initial_pc = memory.read_word(0x06) as usize;
         let prop_defaults = memory.read_word(0x0A) as usize;
-        let static_start = memory.read_word(0x0E) as usize;
 
         let alphabet = if version >= 5 {
             Self::load_alphabet(&memory)
@@ -122,7 +126,6 @@ impl<U: Ui> Zmachine<U> {
         let mut zvm = Zmachine {
             version,
             ui,
-            original_dynamic: memory.slice(0, static_start).to_vec(),
             globals_addr: memory.read_word(0x0C) as usize,
             routine_offset: memory.read_word(0x28) as usize,
             string_offset: memory.read_word(0x2A) as usize,
@@ -483,13 +486,18 @@ impl<U: Ui> Zmachine<U> {
             })
             .collect();
 
-        let mut write = self.memory.get_writer(parse_addr + 1);
-        write.byte(tokens.len() as u8);
+        let mut cursor = parse_addr + 1;
+
+        self.memory.write_byte(cursor, tokens.len() as u8);
+        cursor += 1;
 
         tokens.iter().for_each(|&(dict_addr, len, token_addr)| {
-            write.word(dict_addr as u16);
-            write.byte(len as u8);
-            write.byte(token_addr as u8);
+            self.memory.write_word(cursor, dict_addr as u16);
+            cursor += 2;
+            self.memory.write_byte(cursor, len as u8);
+            cursor += 1;
+            self.memory.write_byte(cursor, token_addr as u8);
+            cursor += 1;
         });
     }
 
@@ -1209,7 +1217,7 @@ impl<U: Ui> Zmachine<U> {
 }
 
 // Instruction handlers
-impl<U: Ui> Zmachine<U> {
+impl<'a, U: Ui> Zmachine<'a, U> {
     // OP2_1
     fn do_je(&self, a: u16, values: &[u16]) -> u16 {
         if values.iter().any(|x| a == *x) {
@@ -1541,7 +1549,7 @@ impl<U: Ui> Zmachine<U> {
         self.pc = self.initial_pc;
         self.frames.clear();
         self.frames.push(Frame::empty());
-        self.memory.write(0, self.original_dynamic.as_slice());
+        // FIXME: copy original dynamic from memory
     }
 
     // OP0_184

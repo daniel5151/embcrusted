@@ -1,48 +1,76 @@
-use std::fs::File;
 use std::io;
-use std::io::prelude::*;
 use std::io::Write;
-use std::path::Path;
-use std::process;
 
 use encrusted_embedded::{Options, Ui, Zmachine};
 
+use std::alloc::{GlobalAlloc, Layout, System};
+use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
+
+struct Counter;
+
+static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
+static HIGH_WATERMARK: AtomicUsize = AtomicUsize::new(0);
+
+unsafe impl GlobalAlloc for Counter {
+    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
+        let ret = System.alloc(layout);
+        if !ret.is_null() {
+            ALLOCATED.fetch_add(layout.size(), SeqCst);
+            let a = ALLOCATED.load(SeqCst);
+            if a > HIGH_WATERMARK.load(SeqCst) {
+                HIGH_WATERMARK.store(a, SeqCst)
+            }
+        }
+        ret
+    }
+
+    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
+        System.dealloc(ptr, layout);
+        ALLOCATED.fetch_sub(layout.size(), SeqCst);
+    }
+}
+
+#[global_allocator]
+static A: Counter = Counter;
+
+const ZORK: &[u8] = include_bytes!("../../../../Downloads/ztools/zork1-r88-s840726.z3");
+
 fn main() {
-    let path = std::env::args().nth(1).expect("must specify file to run");
-    let path = Path::new(&path);
+    println!(
+        "pre reset: {} {}",
+        ALLOCATED.load(SeqCst),
+        HIGH_WATERMARK.load(SeqCst)
+    );
 
-    if !path.is_file() {
-        println!(
-            "\nCouldn't find game file: \n   {}\n",
-            path.to_string_lossy()
-        );
-        process::exit(1);
-    }
+    println!("resetting alloc counter");
+    ALLOCATED.store(0, SeqCst);
+    HIGH_WATERMARK.store(0, SeqCst);
 
-    let mut data = Vec::new();
-    let mut file = File::open(path).expect("Error opening file");
-    file.read_to_end(&mut data).expect("Error reading file");
-
-    let version = data[0];
-
-    if version == 0 || version > 8 {
-        println!(
-            "\n\
-             \"{}\" has an unsupported game version: {}\n\
-             Is this a valid game file?\n",
-            path.to_string_lossy(),
-            version
-        );
-        process::exit(1);
-    }
+    println!(
+        "post reset: {} {}",
+        ALLOCATED.load(SeqCst),
+        HIGH_WATERMARK.load(SeqCst)
+    );
 
     let opts = Options { rand_seed: 0x1337 };
-    let mut zvm = Zmachine::new(data, DumbUi::default(), opts);
+    let mut zvm = Zmachine::new(&ZORK, DumbUi::default(), opts);
+
+    println!(
+        "before exec: {} {}",
+        ALLOCATED.load(SeqCst),
+        HIGH_WATERMARK.load(SeqCst)
+    );
 
     while !zvm.step() {
         zvm.ui.fill_input_buf();
         zvm.ack_input();
     }
+
+    println!(
+        "post exec: {} {}",
+        ALLOCATED.load(SeqCst),
+        HIGH_WATERMARK.load(SeqCst)
+    );
 }
 
 pub struct DumbUi {
