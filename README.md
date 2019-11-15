@@ -40,6 +40,4 @@ That said, there is still a _lot_ of fat to trim.
 - RAM usage could be improved by refactoring `String` operations into in-place buffer manipulations, and replacing `Vec`s with static buffers.
 - Binary size could be cut down further by adding feature-flags for specific z-machine version features.
 
-Plus, there is a single usage of `unsafe` in `instruction.rs` which transmutes transmutes a u16 into an enum. I _know_ it's bad, and it really aught to be removed.
-
 Oh, and if you grep for FIXME or TODO, you'll likely to find some low-hanging fruit which need fixing.

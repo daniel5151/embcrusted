@@ -133,7 +133,13 @@ pub enum Opcode {
 
 impl Opcode {
     pub fn from_u16(v: u16) -> Option<Opcode> {
-        Some(unsafe { core::mem::transmute(v) })
+        match v {
+            1..=28 | 128..=143 | 176..=191 | 224..=255 | 1000..=1029 => {
+                // safe, because range is validated
+                Some(unsafe { core::mem::transmute(v) })
+            }
+            _ => None,
+        }
     }
 }
 
