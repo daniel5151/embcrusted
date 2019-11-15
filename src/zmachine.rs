@@ -1672,9 +1672,7 @@ impl<'a, U: Ui> Zmachine<'a, U> {
 
     // VAR_229
     fn do_print_char(&mut self, chr: u16) {
-        let c = [chr as u8];
-        let c = unsafe { str::from_utf8_unchecked(&c) };
-        self.ui.print(&c);
+        self.ui.print(&(chr as u8 as char).to_string());
     }
 
     // VAR_230
