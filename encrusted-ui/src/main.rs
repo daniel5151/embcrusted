@@ -1,64 +1,50 @@
+use std::fs::File;
 use std::io;
+use std::io::Read;
 use std::io::Write;
 
 use encrusted_embedded::{Options, Ui, Zmachine};
 
-use std::alloc::{GlobalAlloc, Layout, System};
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
-
-struct Counter;
-
-static ALLOCATED: AtomicUsize = AtomicUsize::new(0);
-static HIGH_WATERMARK: AtomicUsize = AtomicUsize::new(0);
-
-unsafe impl GlobalAlloc for Counter {
-    unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
-        let ret = System.alloc(layout);
-        if !ret.is_null() {
-            ALLOCATED.fetch_add(layout.size(), SeqCst);
-            let a = ALLOCATED.load(SeqCst);
-            if a > HIGH_WATERMARK.load(SeqCst) {
-                HIGH_WATERMARK.store(a, SeqCst)
-            }
-        }
-        ret
-    }
-
-    unsafe fn dealloc(&self, ptr: *mut u8, layout: Layout) {
-        System.dealloc(ptr, layout);
-        ALLOCATED.fetch_sub(layout.size(), SeqCst);
-    }
-}
+mod counting_alloc;
 
 #[global_allocator]
-static A: Counter = Counter;
+static ALLOCATOR: counting_alloc::CountingAllocator = counting_alloc::CountingAllocator::new();
 
-const ZORK: &[u8] = include_bytes!("../../../../Downloads/ztools/zork1-r88-s840726.z3");
+// for embedded use-cases, you should probably just include the story file as a byte-array. e.g:
+// const ZORK: &[u8] = include_bytes!("../games/zork.z3");
 
 fn main() {
+    let mut data = Vec::new();
+    let mut file = File::open(
+        std::env::args()
+            .nth(1)
+            .expect("must pass story file as argument"),
+    )
+    .expect("Error opening file");
+    file.read_to_end(&mut data).expect("Error reading file");
+
     println!(
-        "pre reset: {} {}",
-        ALLOCATED.load(SeqCst),
-        HIGH_WATERMARK.load(SeqCst)
+        "|| pre reset: {} {}",
+        ALLOCATOR.get_current_usage(),
+        ALLOCATOR.get_high_watermark(),
     );
 
     println!("resetting alloc counter");
-    ALLOCATED.store(0, SeqCst);
-    HIGH_WATERMARK.store(0, SeqCst);
+    ALLOCATOR.reset_counts();
 
     println!(
-        "post reset: {} {}",
-        ALLOCATED.load(SeqCst),
-        HIGH_WATERMARK.load(SeqCst)
+        "|| post reset: {} {}",
+        ALLOCATOR.get_current_usage(),
+        ALLOCATOR.get_high_watermark(),
     );
 
     let opts = Options { rand_seed: 0x1337 };
-    let mut zvm = Zmachine::new(&ZORK, DumbUi::default(), opts);
+    let mut zvm = Zmachine::new(&data, DumbUi::default(), opts);
 
     println!(
-        "before exec: {} {}",
-        ALLOCATED.load(SeqCst),
-        HIGH_WATERMARK.load(SeqCst)
+        "|| before exec: {} {}",
+        ALLOCATOR.get_current_usage(),
+        ALLOCATOR.get_high_watermark(),
     );
 
     while !zvm.step() {
@@ -67,24 +53,15 @@ fn main() {
     }
 
     println!(
-        "post exec: {} {}",
-        ALLOCATED.load(SeqCst),
-        HIGH_WATERMARK.load(SeqCst)
+        "|| post exec: {} {}",
+        ALLOCATOR.get_current_usage(),
+        ALLOCATOR.get_high_watermark(),
     );
 }
 
+#[derive(Default)]
 pub struct DumbUi {
-    len: usize,
-    buf: [u8; 64],
-}
-
-impl Default for DumbUi {
-    fn default() -> DumbUi {
-        DumbUi {
-            len: 0,
-            buf: [0; 64],
-        }
-    }
+    buf: String,
 }
 
 impl DumbUi {
@@ -93,10 +70,7 @@ impl DumbUi {
         io::stdin()
             .read_line(&mut input)
             .expect("Error reading input");
-        let s = input.trim().to_string();
-
-        self.len = s.len();
-        self.buf[..s.len()].copy_from_slice(s.as_ref());
+        self.buf = input.trim().to_string();
     }
 }
 
@@ -116,7 +90,6 @@ impl Ui for DumbUi {
     }
 
     fn get_input_buf(&mut self) -> &str {
-        let raw = &self.buf[..self.len];
-        unsafe { core::str::from_utf8_unchecked(raw) }
+        &self.buf
     }
 }

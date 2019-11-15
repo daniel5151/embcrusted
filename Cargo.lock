@@ -2,12 +2,12 @@
 # It is not intended for manual editing.
 [[package]]
 name = "encrusted-embedded"
-version = "1.1.0"
+version = "0.1.0"
 
 [[package]]
 name = "encrusted-ui"
 version = "0.1.0"
 dependencies = [
- "encrusted-embedded 1.1.0",
+ "encrusted-embedded 0.1.0",
 ]
 
