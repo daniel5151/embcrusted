@@ -40,7 +40,7 @@ macro_rules! println {
 
 ////////////////////////////////////////////////////////////////////////////////
 
-use encrusted_embedded::{Options, Ui, Zmachine};
+use embcrusted::{Options, Ui, Zmachine};
 
 const DATA: &[u8] = include_bytes!("../games/zork1.z3");
 

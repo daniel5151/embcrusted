@@ -3,7 +3,7 @@ use std::io;
 use std::io::Read;
 use std::io::Write;
 
-use encrusted_embedded::{Options, Ui, Zmachine};
+use embcrusted::{Options, Ui, Zmachine};
 
 mod counting_alloc;
 

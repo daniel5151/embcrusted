@@ -1,10 +1,10 @@
 [package]
 authors = ["Daniel Prilik <danielprilik@gmail.com>", "Sterling DeMille <sterlingdemille+github@gmail.com>"]
-name = "encrusted-embedded"
+name = "embcrusted"
 version = "0.1.0"
 edition = "2018"
 description = "A `no_std` z-machine (interpreter) for Infocom-era text adventure games whic can run on embedded hardware."
-repository = "https://github.com/daniel5151/encrusted-embedded"
+repository = "https://github.com/daniel5151/embcrusted"
 readme = "README.md"
 license = "MIT"
 
@@ -22,4 +22,4 @@ rpath = false
 [dependencies]
 
 [workspace]
-members = ["encrusted-ui", "encrusted-ui-no-std"]
+members = ["embcrusted-ui", "embcrusted-ui-no-std"]

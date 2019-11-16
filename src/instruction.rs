@@ -1,6 +1,7 @@
 use alloc::vec::Vec;
 use core::hint::unreachable_unchecked;
 
+#[allow(dead_code)]
 #[allow(non_camel_case_types)]
 #[repr(u16)]
 #[derive(Clone, Copy, PartialEq)]
