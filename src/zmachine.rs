@@ -80,9 +80,9 @@ impl BadHashMap {
     }
 }
 
+/// A z-machine interpreter
 pub struct Zmachine<'a, U: Ui> {
     pub ui: U,
-    pub options: Options,
     version: u8,
     memory: Buffer<'a>,
     routine_offset: usize,
@@ -103,6 +103,7 @@ pub struct Zmachine<'a, U: Ui> {
 }
 
 impl<'a, U: Ui> Zmachine<'a, U> {
+    /// Create a new z-machine interpreter.
     pub fn new(data: &'a [u8], ui: U, options: Options) -> Zmachine<'a, U> {
         let static_start = ((data[0x0E] as usize) << 8) + (data[0x0F] as usize);
 
@@ -137,13 +138,17 @@ impl<'a, U: Ui> Zmachine<'a, U> {
             paused_instr: None,
             rng: MicroRng(options.rand_seed),
             memory,
-            options,
         };
 
         // read into dictionary & word separators
         zvm.populate_dictionary();
 
         zvm
+    }
+
+    /// Get a mutable reference to the Ui
+    pub fn ui(&mut self) -> &mut U {
+        &mut self.ui
     }
 
     #[allow(dead_code)]
@@ -848,15 +853,6 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         }
     }
 
-    // Web UI only
-    #[allow(dead_code)]
-    pub fn get_current_room(&self) -> (u16, String) {
-        let num = self.read_global(0);
-        let name = self.get_object_name(num);
-
-        (num, name)
-    }
-
     fn get_status(&self) -> (String, String) {
         let num = self.read_global(0);
         let left = self.get_object_name(num);
@@ -883,7 +879,7 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         (left, right)
     }
 
-    pub fn update_status_bar(&self) {
+    fn update_status_bar(&self) {
         // status bar only used in v1-3
         if self.version > 3 {
             return;
@@ -1070,7 +1066,7 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         }
     }
 
-    pub fn handle_instruction(&mut self, instr: &Instruction) {
+    fn handle_instruction(&mut self, instr: &Instruction) {
         use self::Opcode::*;
 
         // ~mutably~ gets the arguments (might pop stack)
@@ -1183,7 +1179,7 @@ impl<'a, U: Ui> Zmachine<'a, U> {
         }
     }
 
-    /// loop through instructions until user input is needed
+    /// loop through instructions until user input is needed.
     /// false == read required, true == machine is done.
     pub fn step(&mut self) -> bool {
         loop {
@@ -1721,7 +1717,6 @@ impl<'a, U: Ui> Zmachine<'a, U> {
     }
 
     // EXT_1002
-    #[allow(clippy::comparison_chain)]
     fn do_log_shift(&mut self, number: u16, places: u16) -> u16 {
         let number = number as u32;
         let places = places as i16;
@@ -1736,7 +1731,6 @@ impl<'a, U: Ui> Zmachine<'a, U> {
     }
 
     // EXT_1003
-    #[allow(clippy::comparison_chain)]
     fn do_art_shift(&mut self, number: u16, places: u16) -> u16 {
         let mut number = (number as i16) as i32;
         let places = places as i16;

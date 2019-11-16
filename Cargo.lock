@@ -11,3 +11,18 @@ dependencies = [
  "encrusted-embedded 0.1.0",
 ]
 
+[[package]]
+name = "encrusted-ui-no-std"
+version = "0.1.0"
+dependencies = [
+ "encrusted-embedded 0.1.0",
+ "libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)",
+]
+
+[[package]]
+name = "libc"
+version = "0.2.65"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+
+[metadata]
+"checksum libc 0.2.65 (registry+https://github.com/rust-lang/crates.io-index)" = "1a31a0627fdf1f6a39ec0dd577e101440b7db22672c0901fe00a9a6fbb5c24e8"
