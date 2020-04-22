@@ -6,10 +6,6 @@ use std::fmt::Write as FmtWrite;
 use std::process;
 use std::str;
 
-use enum_primitive::FromPrimitive;
-use rand;
-use rand::{Rng, SeedableRng};
-
 use crate::buffer::Buffer;
 use crate::frame::Frame;
 use crate::instruction::Branch;
@@ -17,6 +13,7 @@ use crate::instruction::Instruction;
 use crate::instruction::Opcode;
 use crate::instruction::Operand;
 use crate::instruction::OperandType;
+use crate::micro_rng::MicroRng;
 use crate::options::Options;
 use crate::traits::UI;
 
@@ -137,7 +134,7 @@ pub struct Zmachine {
     obj_table_addr: usize,
     obj_size: usize,
     attr_width: usize,
-    rng: rand::XorShiftRng,
+    rng: MicroRng,
 }
 
 #[derive(Debug)]
@@ -183,7 +180,7 @@ impl Zmachine {
             obj_table_addr: prop_defaults + (if version <= 3 { 31 } else { 63 }) * 2,
             obj_size: if version <= 3 { 9 } else { 14 },
             attr_width: if version <= 3 { 4 } else { 6 },
-            rng: rand::SeedableRng::from_seed(options.rand_seed.clone()),
+            rng: MicroRng::new(options.rand_seed),
             memory,
             options,
         };
@@ -1860,12 +1857,12 @@ impl Zmachine {
         let range = range as i16;
 
         if range <= 0 {
-            self.rng.reseed([range as u32, 0, 0, 0]);
+            self.rng.reseed(range as usize);
             0
         } else if range == 1 {
             1
         } else {
-            (self.rng.gen::<f32>() * f32::from(range)).ceil() as u16
+            self.rng.gen() as u16
         }
     }
 

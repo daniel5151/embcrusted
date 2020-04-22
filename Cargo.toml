@@ -12,9 +12,5 @@ edition = "2018"
 lto = true
 opt-level = 's'
 
-[dependencies]
-enum_primitive = "0.1.1"
-rand = "0.4.2"
-
 [workspace]
 members = ["encrusted-term-ui"]

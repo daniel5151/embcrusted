@@ -42,9 +42,7 @@ fn main() {
     let ui = TerminalUI::new();
 
     let mut opts = Options::default();
-
-    let rand32 = || rand::random();
-    opts.rand_seed = [rand32(), rand32(), rand32(), rand32()];
+    opts.rand_seed = rand::random();
 
     let mut zvm = Zmachine::new(data, ui, opts).expect("could not construct z-machine");
 

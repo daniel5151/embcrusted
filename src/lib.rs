@@ -3,6 +3,7 @@
 mod buffer;
 mod frame;
 mod instruction;
+mod micro_rng;
 mod options;
 mod traits;
 mod zmachine;
