@@ -3,18 +3,12 @@ use std::collections::{HashMap, HashSet};
 use std::env;
 use std::fmt;
 use std::fmt::Write as FmtWrite;
-use std::fs::File;
-use std::io::prelude::*;
-use std::path::PathBuf;
 use std::process;
 use std::str;
 
-use base64;
 use enum_primitive::FromPrimitive;
 use rand;
 use rand::{Rng, SeedableRng};
-use serde_derive::Serialize;
-use serde_json;
 
 use crate::buffer::Buffer;
 use crate::frame::Frame;
@@ -24,7 +18,6 @@ use crate::instruction::Opcode;
 use crate::instruction::Operand;
 use crate::instruction::OperandType;
 use crate::options::Options;
-use crate::quetzal::QuetzalSave;
 use crate::traits::UI;
 
 #[derive(Debug)]
@@ -35,7 +28,7 @@ enum ZStringState {
     Tenbit2(u8),
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug)]
 pub struct Object {
     number: u16,
     name: String,
@@ -130,9 +123,6 @@ pub struct Zmachine {
     version: u8,
     memory: Buffer,
     original_dynamic: Vec<u8>,
-    save_dir: String,
-    save_name: String,
-    static_start: usize,
     routine_offset: usize,
     string_offset: usize,
     alphabet: [Vec<String>; 3],
@@ -147,10 +137,6 @@ pub struct Zmachine {
     obj_table_addr: usize,
     obj_size: usize,
     attr_width: usize,
-    paused_instr: Option<Instruction>,
-    current_state: Option<(String, Vec<u8>)>,
-    undos: Vec<(String, Vec<u8>)>,
-    redos: Vec<(String, Vec<u8>)>,
     rng: rand::XorShiftRng,
 }
 
@@ -172,14 +158,11 @@ impl Zmachine {
         let mut zvm = Zmachine {
             version,
             ui,
-            save_dir: options.save_dir.clone(),
-            save_name: format!("{}.sav", &options.save_name),
             instr_log: String::new(),
             original_dynamic: memory.slice(0, static_start).to_vec(),
             globals_addr: memory.read_word(0x0C) as usize,
             routine_offset: memory.read_word(0x28) as usize,
             string_offset: memory.read_word(0x2A) as usize,
-            static_start,
             initial_pc,
             pc: initial_pc,
             frames: vec![Frame::empty()],
@@ -191,10 +174,6 @@ impl Zmachine {
             obj_table_addr: prop_defaults + (if version <= 3 { 31 } else { 63 }) * 2,
             obj_size: if version <= 3 { 9 } else { 14 },
             attr_width: if version <= 3 { 4 } else { 6 },
-            paused_instr: None,
-            current_state: None,
-            undos: Vec::new(),
-            redos: Vec::new(),
             rng: rand::SeedableRng::from_seed(options.rand_seed.clone()),
             memory,
             options,
@@ -970,15 +949,6 @@ impl Zmachine {
         }
     }
 
-    // Web UI only
-    #[allow(dead_code)]
-    pub fn get_current_room(&self) -> (u16, String) {
-        let num = self.read_global(0);
-        let name = self.get_object_name(num);
-
-        (num, name)
-    }
-
     fn get_status(&self) -> (String, String) {
         let num = self.read_global(0);
         let left = self.get_object_name(num);
@@ -1013,77 +983,6 @@ impl Zmachine {
 
         let (left, right) = self.get_status();
         self.ui.set_status_bar(&left, &right);
-    }
-
-    fn make_save_state(&self, pc: usize) -> Vec<u8> {
-        // save the whole dynamic memory region (between 0 and the start of static)
-        let dynamic = self.memory.slice(0, self.static_start);
-        let original = self.original_dynamic.as_slice();
-        let frames = &self.frames;
-        let chksum = self.memory.read_word(0x1c);
-        let release = self.memory.read_word(0x02);
-        let serial = self.memory.read(0x12, 6);
-
-        QuetzalSave::make(pc, dynamic, original, frames, chksum, release, serial)
-    }
-
-    fn restore_state(&mut self, data: &[u8]) {
-        let save = QuetzalSave::from_bytes(&data[..], &self.original_dynamic[..]);
-
-        // verify that the save if so the right game and that the memory is ok
-        if save.chksum != self.memory.read_word(0x1C) {
-            panic!("Invalid save, checksum is different");
-        }
-
-        if self.static_start < save.memory.len() {
-            panic!("Invalid save, memory is too long");
-        }
-
-        self.pc = save.pc;
-        self.frames = save.frames;
-        self.memory.write(0, save.memory.as_slice());
-    }
-
-    pub fn undo(&mut self) -> bool {
-        if let Some(ref instr) = self.paused_instr {
-            if instr.opcode != Opcode::VAR_228 {
-                return false;
-            }
-        }
-
-        if self.undos.is_empty() {
-            self.ui.print("\n[Can't undo that far.]\n");
-            return false;
-        }
-
-        let new_current = self.undos.pop().unwrap();
-        self.redos.push(self.current_state.take().unwrap());
-
-        self.restore_state(new_current.1.as_slice());
-        self.current_state = Some(new_current);
-
-        true
-    }
-
-    pub fn redo(&mut self) -> bool {
-        if let Some(ref instr) = self.paused_instr {
-            if instr.opcode != Opcode::VAR_228 {
-                return false;
-            }
-        }
-
-        if self.redos.is_empty() {
-            self.ui.print("\n[Nothing to redo.]\n");
-            return false;
-        }
-
-        let new_current = self.redos.pop().unwrap();
-        self.undos.push(self.current_state.take().unwrap());
-
-        self.restore_state(new_current.1.as_slice());
-        self.current_state = Some(new_current);
-
-        true
     }
 
     fn get_arguments(&mut self, operands: &[Operand]) -> Vec<u16> {
@@ -1436,13 +1335,10 @@ impl Zmachine {
             $attrs num/name     (list object attributes) \n\
             $props num/name     (list object properties) \n\
             $header             (show header info) \n\
-            $history            (list saved states) \n\
             $have_attr num      (list objects that have given attribute enabled) \n\
             $have_prop num      (list objects that have given property) \n\
             $teleport num/name  (teleport to a room) \n\
             $steal num/name     (takes any item) \n\
-            $undo \n\
-            $redo \n\
             $quit
         ",
         );
@@ -1468,16 +1364,11 @@ impl Zmachine {
             "$props" => self.debug_object_properties(arg),
             "$simple" => self.debug_object_simple(arg.parse().unwrap_or(1)),
             "$header" => self.debug_header(),
-            "$history" => self.debug_history(),
             "$have_attr" => self.debug_have_attribute(arg),
             "$have_prop" => self.debug_have_property(arg),
             "$steal" => self.debug_steal(arg),
             "$teleport" => self.debug_teleport(arg),
             "$quit" => process::exit(0),
-            // if undo/redo fails, should ask for input again
-            // if they succeed, do nothing because zmachine state changed
-            "$undo" => should_ask_again = !self.undo(),
-            "$redo" => should_ask_again = !self.redo(),
             // unrecognized commands should ask for user input again
             _ => {
                 should_ask_again = false;
@@ -1504,136 +1395,6 @@ impl Zmachine {
         }
 
         self.ui.reset();
-    }
-
-    // Web UI only
-    #[allow(dead_code)]
-    pub fn step(&mut self) -> bool {
-        // loop through instructions until user input is needed
-        // (saves/restores need a save name, read instructions need user input)
-        // Pauses on these instructions and control is passed back to js
-        loop {
-            let instr = self.decode_instruction(self.pc);
-
-            if self.options.log_instructions {
-                write!(self.instr_log, "\n{}", &instr).unwrap();
-            }
-
-            match instr.opcode {
-                // SAVE
-                Opcode::OP0_181 => {
-                    let pc = instr.next - 1;
-                    let state = self.make_save_state(pc);
-                    self.send_save_message("save", &state);
-
-                    // Advance the pc, assuming that the save was successful
-                    self.process_save_result(&instr);
-                }
-                // RESTORE (breaks loop)
-                Opcode::OP0_182 => {
-                    self.ui.message("restore", "");
-                    self.paused_instr = Some(instr);
-
-                    return false;
-                }
-                // QUIT (breaks loop)
-                Opcode::OP0_186 => {
-                    // undo 2x - get to the savestate right before the
-                    // "are you sure?" dialog box that usually shows up:
-                    self.undos.pop();
-
-                    if let Some((_, state)) = self.undos.pop() {
-                        self.send_save_message("savestate", &state);
-                    }
-
-                    return true; // done == true
-                }
-                // READ (breaks loop)
-                Opcode::VAR_228 => {
-                    let state = self.make_save_state(self.pc);
-                    self.send_save_message("savestate", &state);
-
-                    // web ui saves current state here BEFORE processing user input
-                    let (location, _) = self.get_status();
-                    self.current_state = Some((location, state));
-                    self.paused_instr = Some(instr);
-
-                    return false;
-                }
-                _ => {
-                    self.handle_instruction(&instr);
-                }
-            }
-        }
-    }
-
-    // Web UI only - gives user input to the paused read instruction
-    // (passes control back JS afterwards)
-    #[allow(dead_code)]
-    pub fn handle_input(&mut self, input: String) {
-        let instr = self
-            .paused_instr
-            .take()
-            .expect("Can't handle input, no paused instruction to resume");
-
-        // handle special debugging commands
-        // these inputs shouldn't be processed normally
-        if self.is_debug_command(&input) {
-            if self.handle_debug_command(&input) {
-                self.ui.print("\n>");
-            }
-
-            // return execution to JS, which will read user input again:
-            return;
-        }
-
-        // new input changes timelines, so remove any obsolete redos
-        self.redos.clear();
-
-        // move current state into the undo list now
-        if self.current_state.is_some() {
-            self.undos.push(self.current_state.take().unwrap());
-        }
-
-        // explicitly handle read (need to get args first)
-        let args = self.get_arguments(instr.operands.as_slice());
-        self.do_sread_second(args[0], args[1], input);
-        self.pc = instr.next;
-    }
-
-    // Web UI only
-    #[allow(dead_code)]
-    pub fn restore(&mut self, data: &str) {
-        let state = base64::decode(&data);
-
-        // cancel restore (sending an empty string or if base64 decode fails)
-        if data.is_empty() || state.is_err() {
-            let instr = self.paused_instr.take().unwrap();
-            self.process_result(&instr, 0);
-        } else {
-            self.restore_state(state.unwrap().as_slice());
-            self.process_restore_result();
-        }
-    }
-
-    // Web UI only
-    // Loads a saved state _without_ processing a restore result (like the above)
-    #[allow(dead_code)]
-    pub fn load_savestate(&mut self, data: &str) {
-        let state = base64::decode(data).unwrap();
-        self.restore_state(state.as_slice());
-    }
-
-    // Web UI only
-    #[allow(dead_code)]
-    fn send_save_message(&mut self, msg_type: &str, state: &[u8]) {
-        let b64 = base64::encode(&state);
-
-        let (location, info) = self.get_status();
-        let status = [&location, " - ", &info].concat();
-
-        let msg_body = serde_json::to_string(&(status, b64)).unwrap();
-        self.ui.message(msg_type, &msg_body);
     }
 }
 
@@ -1925,107 +1686,14 @@ impl Zmachine {
 
     // OP0_181
     fn do_save(&mut self, instr: &Instruction) {
-        let prompt = format!("\nFilename [{}]: ", self.save_name);
-        self.ui.print(&prompt);
-
-        let input = self.ui.get_user_input();
-        let mut path = PathBuf::from(&self.save_dir);
-        let mut file;
-
-        match input.to_lowercase().as_ref() {
-            "" | "yes" | "y" => path.push(&self.save_name),
-            "no" | "n" | "cancel" => {
-                self.process_result(instr, 0);
-                return;
-            }
-            _ => path.push(input),
-        }
-
-        if let Ok(handle) = File::create(&path) {
-            file = handle;
-        } else {
-            self.ui.print("Can't save to that file, try another?\n");
-            self.process_result(instr, 0);
-            return;
-        }
-
-        // save file name for next use
-        self.save_name = path.file_name().unwrap().to_string_lossy().into_owned();
-
-        // The save PC points to either the save instructions branch data or store
-        // data. In either case, this is the last byte of the instruction. (so -1)
-        let pc = instr.next - 1;
-        let data = self.make_save_state(pc);
-        file.write_all(&data[..]).expect("Error saving to file");
-
-        self.process_save_result(instr);
-    }
-
-    fn process_save_result(&mut self, instr: &Instruction) {
-        // (v1-3): follow branch if needed (value "1" means the save succeeded)
-        // (v4+):  or store the value "1" at the give store position
-        self.process_result(instr, 1);
+        self.ui.print("\nSaving is not supported!\n");
+        self.process_result(instr, 0);
     }
 
     // OP0_182
     fn do_restore(&mut self, instr: &Instruction) {
-        let prompt = format!("\nFilename [{}]: ", self.save_name);
-        self.ui.print(&prompt);
-
-        let input = self.ui.get_user_input();
-        let mut path = PathBuf::from(&self.save_dir);
-        let mut data = Vec::new();
-        let mut file;
-
-        match input.to_lowercase().as_ref() {
-            "" | "yes" | "y" => path.push(&self.save_name),
-            "no" | "n" | "cancel" => {
-                self.process_result(instr, 0);
-                return;
-            }
-            _ => path.push(input),
-        }
-
-        if let Ok(handle) = File::open(&path) {
-            file = handle;
-        } else {
-            self.ui.print("Can't open that file, try another?\n");
-            self.process_result(instr, 0);
-            return;
-        }
-
-        // save file name for next use
-        self.save_name = path.file_name().unwrap().to_string_lossy().into_owned();
-
-        // restore program counter position, stack frames, and dynamic memory
-        file.read_to_end(&mut data)
-            .expect("Error reading save file");
-        self.restore_state(data.as_slice());
-        self.process_restore_result();
-    }
-
-    fn process_restore_result(&mut self) {
-        // In versions 1-3 the PC points to the BRANCH data of the save instruction.
-        // Saves branch if successful, so follow the branch if the topmost bit
-        // (condition bit) of the branch data is set. Otherwise go to the next
-        // instruction (the next byte address).
-        //
-        // In versions 4+ the PC points to the number that the save result should
-        // be saved in. (Saves store the value 2 when successful)
-        //
-        // (note: this logic only applies to the save/restore instructions)
-        let byte = self.memory.read_byte(self.pc);
-
-        if self.version <= 3 {
-            if byte & 0b1000_0000 != 0 {
-                self.pc += (byte & 0b0011_1111) as usize - 2; // follow branch
-            } else {
-                self.pc += 1; // next instruction
-            }
-        } else {
-            self.pc += 1;
-            self.write_variable(byte, 2); // store "we just restored" value
-        }
+        self.ui.print("\nRestoring is not supported!\n");
+        self.process_result(instr, 0);
     }
 
     // OP0_183
@@ -2124,7 +1792,7 @@ impl Zmachine {
         // add extra space so it doesn't look janky (non-spec)
         self.ui.print(" ");
 
-        let input = self.ui.get_user_input();
+        let mut input = self.ui.get_user_input();
 
         // handle special debugging commands
         // these inputs shouldn't be processed normally
@@ -2137,24 +1805,6 @@ impl Zmachine {
             return;
         }
 
-        self.do_sread_second(text_addr, parse_addr, input);
-
-        // save state JUST after having processed user input
-        // new input changes timelines, so remove any obsolete redos
-        self.redos.clear();
-
-        // push the current state into the undo list
-        if self.current_state.is_some() {
-            self.undos.push(self.current_state.take().unwrap());
-        }
-
-        // and save the current state
-        let location = self.get_object_name(self.read_global(0));
-        let state = self.make_save_state(instr.next);
-        self.current_state = Some((location, state));
-    }
-
-    fn do_sread_second(&mut self, text_addr: u16, parse_addr: u16, mut raw: String) {
         let text_addr = text_addr as usize;
         let parse_addr = parse_addr as usize;
 
@@ -2164,8 +1814,8 @@ impl Zmachine {
             max_length -= 1;
         }
 
-        raw.truncate(max_length as usize);
-        let input = &raw.to_lowercase();
+        input.truncate(max_length as usize);
+        let input = &input.to_lowercase();
 
         let bytes = input.as_bytes();
         let len = bytes.len();
@@ -2588,31 +2238,6 @@ impl Zmachine {
         }
 
         self.insert_obj(num, you);
-    }
-
-    pub fn debug_history(&mut self) {
-        let undo_count = self.undos.len();
-        let total = self.undos.len() + self.redos.len() + 1;
-
-        self.ui.debug(&"History:");
-
-        for (i, state) in self.undos.iter().enumerate() {
-            let index = i + 1;
-            self.ui
-                .debug(&format!("    ({}/{}) @ {}", index, total, state.0));
-        }
-
-        if let Some(ref current) = self.current_state {
-            let index = undo_count + 1;
-            self.ui
-                .debug(&format!(" -> ({}/{}) @ {}", index, total, current.0));
-        }
-
-        for (i, state) in self.redos.iter().rev().enumerate() {
-            let index = undo_count + i + 2;
-            self.ui
-                .debug(&format!("    ({}/{}) @ {}", index, total, state.0));
-        }
     }
 
     fn debug_routine(&mut self, routine_addr: usize) {

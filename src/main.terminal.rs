@@ -11,7 +11,6 @@ mod buffer;
 mod frame;
 mod instruction;
 mod options;
-mod quetzal;
 mod traits;
 mod ui_terminal;
 mod zmachine;
@@ -64,8 +63,6 @@ fn main() {
     let ui = TerminalUI::new();
 
     let mut opts = Options::default();
-    opts.save_dir = path.parent().unwrap().to_string_lossy().into_owned();
-    opts.save_name = path.file_stem().unwrap().to_string_lossy().into_owned();
 
     let rand32 = || rand::random();
     opts.rand_seed = [rand32(), rand32(), rand32(), rand32()];

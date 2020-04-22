@@ -159,8 +159,4 @@ impl UI for TerminalUI {
     fn reset(&self) {
         println!();
     }
-
-    // unimplemented, only used in web ui
-    fn flush(&mut self) {}
-    fn message(&self, _mtype: &str, _msg: &str) {}
 }
