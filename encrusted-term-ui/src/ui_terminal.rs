@@ -9,7 +9,7 @@ use lazy_static::lazy_static;
 use regex::Regex;
 use term_size;
 
-use crate::traits::UI;
+use encrusted::UI;
 
 lazy_static! {
     static ref ANSI_RE: Regex =

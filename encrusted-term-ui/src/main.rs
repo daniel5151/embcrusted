@@ -6,19 +6,11 @@ use std::path::Path;
 use std::process;
 
 use clap::{App, Arg};
+use encrusted::{Options, Zmachine, UI};
 
-mod buffer;
-mod frame;
-mod instruction;
-mod options;
-mod traits;
 mod ui_terminal;
-mod zmachine;
 
-use crate::options::Options;
-use crate::traits::UI;
-use crate::ui_terminal::TerminalUI;
-use crate::zmachine::Zmachine;
+use ui_terminal::TerminalUI;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
