@@ -1,4 +1,3 @@
-
 use std::boxed::Box;
 use std::collections::{HashMap, HashSet};
 use std::env;
@@ -16,16 +15,16 @@ use rand;
 use rand::{Rng, SeedableRng};
 use serde_json;
 
-use buffer::Buffer;
-use frame::Frame;
-use instruction::Branch;
-use instruction::Instruction;
-use instruction::Opcode;
-use instruction::Operand;
-use instruction::OperandType;
-use options::Options;
-use quetzal::QuetzalSave;
-use traits::UI;
+use crate::buffer::Buffer;
+use crate::frame::Frame;
+use crate::instruction::Branch;
+use crate::instruction::Instruction;
+use crate::instruction::Opcode;
+use crate::instruction::Operand;
+use crate::instruction::OperandType;
+use crate::options::Options;
+use crate::quetzal::QuetzalSave;
+use crate::traits::UI;
 
 #[derive(Debug)]
 enum ZStringState {
@@ -124,7 +123,7 @@ impl ObjectProperty {
 }
 
 pub struct Zmachine {
-    pub ui: Box<UI>,
+    pub ui: Box<dyn UI>,
     pub options: Options,
     pub instr_log: String,
     version: u8,
@@ -155,7 +154,7 @@ pub struct Zmachine {
 }
 
 impl Zmachine {
-    pub fn new(data: Vec<u8>, ui: Box<UI>, options: Options) -> Zmachine {
+    pub fn new(data: Vec<u8>, ui: Box<dyn UI>, options: Options) -> Zmachine {
         let memory = Buffer::new(data);
 
         let version = memory.read_byte(0x00);
@@ -242,10 +241,21 @@ impl Zmachine {
         if alphabet_addr == 0 {
             Zmachine::default_alphabet()
         } else {
-            let A0 = format!(" .....{}", str::from_utf8(memory.read(alphabet_addr, 26)).expect("bad alphabet table A0!"));
-            let A1 = format!(" .....{}", str::from_utf8(memory.read(alphabet_addr + 26, 26)).expect("bad alphabet table A1!"));
+            let A0 = format!(
+                " .....{}",
+                str::from_utf8(memory.read(alphabet_addr, 26)).expect("bad alphabet table A0!")
+            );
+            let A1 = format!(
+                " .....{}",
+                str::from_utf8(memory.read(alphabet_addr + 26, 26))
+                    .expect("bad alphabet table A1!")
+            );
             // First two characters are ignored and accounted for in our padding.
-            let A2 = format!(" ......\n{}", str::from_utf8(memory.read(alphabet_addr + 26 + 26 + 2, 24)).expect("Bad alphabet table A2!"));
+            let A2 = format!(
+                " ......\n{}",
+                str::from_utf8(memory.read(alphabet_addr + 26 + 26 + 2, 24))
+                    .expect("Bad alphabet table A2!")
+            );
 
             [
                 Zmachine::to_alphabet_entry(&A0),
@@ -259,8 +269,8 @@ impl Zmachine {
         let addr = addr as usize;
 
         match self.version {
-            1...3 => addr * 2,
-            4...7 => addr * 4,
+            1..=3 => addr * 2,
+            4..=7 => addr * 4,
             8 => addr * 8,
             _ => unreachable!(),
         }
@@ -268,14 +278,14 @@ impl Zmachine {
 
     fn unpack_routine_addr(&self, addr: u16) -> usize {
         match self.unpack(addr) {
-            x @ 6...7 => x + self.routine_offset * 8,
+            x @ 6..=7 => x + self.routine_offset * 8,
             x => x,
         }
     }
 
     fn unpack_print_paddr(&self, addr: u16) -> usize {
         match self.unpack(addr) {
-            x @ 6...7 => x + self.string_offset * 8,
+            x @ 6..=7 => x + self.string_offset * 8,
             x => x,
         }
     }
@@ -337,8 +347,8 @@ impl Zmachine {
         #[allow(unreachable_patterns)]
         match index {
             0 => self.stack_pop(),
-            1...15 => self.read_local(index - 1),
-            16...255 => self.read_global(index - 16),
+            1..=15 => self.read_local(index - 1),
+            16..=255 => self.read_global(index - 16),
             _ => unreachable!(),
         }
     }
@@ -347,8 +357,8 @@ impl Zmachine {
         #[allow(unreachable_patterns)]
         match index {
             0 => self.stack_peek(),
-            1...15 => self.read_local(index - 1),
-            16...255 => self.read_global(index - 16),
+            1..=15 => self.read_local(index - 1),
+            16..=255 => self.read_global(index - 16),
             _ => unreachable!(),
         }
     }
@@ -357,8 +367,8 @@ impl Zmachine {
         #[allow(unreachable_patterns)]
         match index {
             0 => self.stack_push(value),
-            1...15 => self.write_local(index - 1, value),
-            16...255 => self.write_global(index - 16, value),
+            1..=15 => self.write_local(index - 1, value),
+            16..=255 => self.write_global(index - 16, value),
             _ => unreachable!(),
         }
     }
@@ -370,8 +380,8 @@ impl Zmachine {
                 self.stack_pop();
                 self.stack_push(value);
             }
-            1...15 => self.write_local(index - 1, value),
-            16...255 => self.write_global(index - 16, value),
+            1..=15 => self.write_local(index - 1, value),
+            16..=255 => self.write_global(index - 16, value),
             _ => unreachable!(),
         }
     }
@@ -410,7 +420,11 @@ impl Zmachine {
                 state = match (zchar, &state) {
                     // the next zchar will be an abbrev index
                     (zch, &Alphabet(_)) if zch >= 1 && zch <= 3 => {
-                        assert!(allow_abbrevs, "Abbrev at {} contained recursive abbrev!", addr);
+                        assert!(
+                            allow_abbrevs,
+                            "Abbrev at {} contained recursive abbrev!",
+                            addr
+                        );
                         Abbrev(zch)
                     }
                     // shift character for the next zchar
@@ -781,7 +795,11 @@ impl Zmachine {
         let byte = self.memory.read_byte(addr);
         let bit = attr % 8;
 
-        if byte & (128 >> bit) != 0 { 1 } else { 0 }
+        if byte & (128 >> bit) != 0 {
+            1
+        } else {
+            0
+        }
     }
 
     fn set_attr(&mut self, object: u16, attr: u16) {
@@ -822,7 +840,7 @@ impl Zmachine {
         let value_addr;
 
         match self.version {
-            1...3 => {
+            1..=3 => {
                 num = header % 32;
                 len = header / 32 + 1;
                 value_addr = addr + 1; // 1 byte header
@@ -832,7 +850,9 @@ impl Zmachine {
 
                 if header & 0b1000_0000 != 0 {
                     len = self.memory.read_byte(addr + 1) & 0b0011_1111;
-                    if len == 0 { len = 64; } // Z-Machine standard section 12.4.2.1.1
+                    if len == 0 {
+                        len = 64;
+                    } // Z-Machine standard section 12.4.2.1.1
 
                     value_addr = addr + 2; // 2 byte header
                 } else {
@@ -890,7 +910,11 @@ impl Zmachine {
     fn get_prop_addr(&self, object: u16, property_number: u16) -> usize {
         let prop = self.find_prop(object, property_number);
 
-        if prop.num != 0 { prop.addr } else { 0 }
+        if prop.num != 0 {
+            prop.addr
+        } else {
+            0
+        }
     }
 
     fn get_prop_len(&self, prop_data_addr: usize) -> u8 {
@@ -908,7 +932,11 @@ impl Zmachine {
             // This is already the *second* header byte.
             let len = prop_header & 0b0011_1111;
 
-            if len == 0 { 64 } else { len }
+            if len == 0 {
+                64
+            } else {
+                len
+            }
         } else if prop_header & 0b0100_0000 != 0 {
             2
         } else {
@@ -1134,16 +1162,16 @@ impl Zmachine {
         #[allow(unreachable_patterns)]
         let (opcode, optypes) = match first {
             0xbe => (get_opcode(read.byte(), 1000), get_types(&[read.byte()])),
-            0x00...0x1f => (get_opcode(btm_5(first), 0), vec![Small, Small]),
-            0x20...0x3f => (get_opcode(btm_5(first), 0), vec![Small, Variable]),
-            0x40...0x5f => (get_opcode(btm_5(first), 0), vec![Variable, Small]),
-            0x60...0x7f => (get_opcode(btm_5(first), 0), vec![Variable, Variable]),
-            0x80...0x8f => (get_opcode(btm_4(first), 128), vec![Large]),
-            0x90...0x9f => (get_opcode(btm_4(first), 128), vec![Small]),
-            0xa0...0xaf => (get_opcode(btm_4(first), 128), vec![Variable]),
-            0xb0...0xbd | 0xbf => (get_opcode(btm_4(first), 176), vec![]), // OP_0
-            0xc0...0xdf => (get_opcode(btm_5(first), 0), get_types(&[read.byte()])),
-            0xe0...0xff => {
+            0x00..=0x1f => (get_opcode(btm_5(first), 0), vec![Small, Small]),
+            0x20..=0x3f => (get_opcode(btm_5(first), 0), vec![Small, Variable]),
+            0x40..=0x5f => (get_opcode(btm_5(first), 0), vec![Variable, Small]),
+            0x60..=0x7f => (get_opcode(btm_5(first), 0), vec![Variable, Variable]),
+            0x80..=0x8f => (get_opcode(btm_4(first), 128), vec![Large]),
+            0x90..=0x9f => (get_opcode(btm_4(first), 128), vec![Small]),
+            0xa0..=0xaf => (get_opcode(btm_4(first), 128), vec![Variable]),
+            0xb0..=0xbd | 0xbf => (get_opcode(btm_4(first), 176), vec![]), // OP_0
+            0xc0..=0xdf => (get_opcode(btm_5(first), 0), get_types(&[read.byte()])),
+            0xe0..=0xff => {
                 let opcode = get_opcode(btm_5(first), 224);
 
                 if opcode == Opcode::VAR_236 || opcode == Opcode::VAR_250 {
@@ -1332,7 +1360,9 @@ impl Zmachine {
             (VAR_229, &[chr]) => self.do_print_char(chr),
             (VAR_230, &[num]) => self.do_print_num(num),
             (VAR_232, &[value]) => self.do_push(value),
-            (VAR_233, &[var]) => { self.do_pull(var); }
+            (VAR_233, &[var]) => {
+                self.do_pull(var);
+            }
             (VAR_236, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vs2
             (VAR_249, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn
             (VAR_250, _) if !args.is_empty() => self.do_call(instr, args[0], &args[1..]), // call_vn2
@@ -1540,9 +1570,10 @@ impl Zmachine {
     // (passes control back JS afterwards)
     #[allow(dead_code)]
     pub fn handle_input(&mut self, input: String) {
-        let instr = self.paused_instr.take().expect(
-            "Can't handle input, no paused instruction to resume",
-        );
+        let instr = self
+            .paused_instr
+            .take()
+            .expect("Can't handle input, no paused instruction to resume");
 
         // handle special debugging commands
         // these inputs shouldn't be processed normally
@@ -1609,17 +1640,29 @@ impl Zmachine {
 impl Zmachine {
     // OP2_1
     fn do_je(&self, a: u16, values: &[u16]) -> u16 {
-        if values.iter().any(|x| a == *x) { 1 } else { 0 }
+        if values.iter().any(|x| a == *x) {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_2
     fn do_jl(&self, a: u16, b: u16) -> u16 {
-        if (a as i16) < (b as i16) { 1 } else { 0 }
+        if (a as i16) < (b as i16) {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_3
     fn do_jg(&self, a: u16, b: u16) -> u16 {
-        if (a as i16) > (b as i16) { 1 } else { 0 }
+        if (a as i16) > (b as i16) {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_4
@@ -1629,7 +1672,11 @@ impl Zmachine {
 
         self.write_indirect_variable(var as u8, after as u16);
 
-        if after < (value as i16) { 1 } else { 0 }
+        if after < (value as i16) {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_5
@@ -1639,17 +1686,29 @@ impl Zmachine {
 
         self.write_indirect_variable(var as u8, after as u16);
 
-        if after > (value as i16) { 1 } else { 0 }
+        if after > (value as i16) {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_6
     fn do_jin(&self, obj1: u16, obj2: u16) -> u16 {
-        if self.get_parent(obj1) == obj2 { 1 } else { 0 }
+        if self.get_parent(obj1) == obj2 {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_7
     fn do_test(&self, bitmap: u16, flags: u16) -> u16 {
-        if bitmap & flags == flags { 1 } else { 0 }
+        if bitmap & flags == flags {
+            1
+        } else {
+            0
+        }
     }
 
     // OP2_8
@@ -1744,7 +1803,11 @@ impl Zmachine {
 
     // OP1_128
     fn do_jz(&self, a: u16) -> u16 {
-        if a == 0 { 1 } else { 0 }
+        if a == 0 {
+            1
+        } else {
+            0
+        }
     }
 
     // OP1_129
@@ -1934,9 +1997,8 @@ impl Zmachine {
         self.save_name = path.file_name().unwrap().to_string_lossy().into_owned();
 
         // restore program counter position, stack frames, and dynamic memory
-        file.read_to_end(&mut data).expect(
-            "Error reading save file",
-        );
+        file.read_to_end(&mut data)
+            .expect("Error reading save file");
         self.restore_state(data.as_slice());
         self.process_restore_result();
     }
@@ -2022,7 +2084,7 @@ impl Zmachine {
 
         for _ in 0..count {
             match self.version {
-                1...4 => locals.push(read.word()),
+                1..=4 => locals.push(read.word()),
                 _ => locals.push(0),
             };
         }
@@ -2171,7 +2233,11 @@ impl Zmachine {
                 .arg_count,
         );
 
-        if count >= num { 1 } else { 0 }
+        if count >= num {
+            1
+        } else {
+            0
+        }
     }
 
     // EXT_1002
@@ -2307,7 +2373,8 @@ impl Zmachine {
             String::new()
         };
 
-        self.ui.debug(&format!("{} (len: {})\n", short_name, text_length));
+        self.ui
+            .debug(&format!("{} (len: {})\n", short_name, text_length));
     }
 
     fn get_object_number(&self, input: &str) -> u16 {
@@ -2376,7 +2443,8 @@ impl Zmachine {
             }
         }
 
-        self.ui.debug(&format!("{} ({})\n{:?}", name, num, attributes));
+        self.ui
+            .debug(&format!("{} ({})\n{:?}", name, num, attributes));
     }
 
     pub fn debug_object_details(&self, obj_num: u16) -> String {
@@ -2486,28 +2554,36 @@ impl Zmachine {
     }
 
     fn debug_teleport(&mut self, input: &str) {
-        let you = self.find_yourself().expect("Can't find you in the object tree");
+        let you = self
+            .find_yourself()
+            .expect("Can't find you in the object tree");
         let num = self.get_object_number(input);
 
         if num == 0 {
             self.ui.print("I can't find that room...\n");
             return;
         } else {
-            self.ui.print("Zzzap! Somehow you are in a different place...\n");
+            self.ui
+                .print("Zzzap! Somehow you are in a different place...\n");
         }
 
         self.insert_obj(you, num);
     }
 
     fn debug_steal(&mut self, input: &str) {
-        let you = self.find_yourself().expect("Can't find you in the object tree");
+        let you = self
+            .find_yourself()
+            .expect("Can't find you in the object tree");
         let num = self.get_object_number(input);
 
         if num == 0 {
             self.ui.print("I can't find that object...\n");
             return;
         } else {
-            self.ui.print(&format!("Zzzing! Somehow you are holding the {}...\n", input));
+            self.ui.print(&format!(
+                "Zzzing! Somehow you are holding the {}...\n",
+                input
+            ));
         }
 
         self.insert_obj(num, you);
@@ -2521,17 +2597,20 @@ impl Zmachine {
 
         for (i, state) in self.undos.iter().enumerate() {
             let index = i + 1;
-            self.ui.debug(&format!("    ({}/{}) @ {}", index, total, state.0));
+            self.ui
+                .debug(&format!("    ({}/{}) @ {}", index, total, state.0));
         }
 
         if let Some(ref current) = self.current_state {
             let index = undo_count + 1;
-            self.ui.debug(&format!(" -> ({}/{}) @ {}", index, total, current.0));
+            self.ui
+                .debug(&format!(" -> ({}/{}) @ {}", index, total, current.0));
         }
 
         for (i, state) in self.redos.iter().rev().enumerate() {
             let index = undo_count + i + 2;
-            self.ui.debug(&format!("    ({}/{}) @ {}", index, total, state.0));
+            self.ui
+                .debug(&format!("    ({}/{}) @ {}", index, total, state.0));
         }
     }
 
@@ -2542,7 +2621,7 @@ impl Zmachine {
 
         for _ in 0..count {
             match self.version {
-                1...4 => locals.push(read.word()),
+                1..=4 => locals.push(read.word()),
                 _ => locals.push(0),
             };
         }
@@ -2556,7 +2635,10 @@ impl Zmachine {
             }
 
             let branch = match instr.branch {
-                Some(Branch { address: Some(addr), .. }) => Some(addr),
+                Some(Branch {
+                    address: Some(addr),
+                    ..
+                }) => Some(addr),
                 _ => None,
             };
 

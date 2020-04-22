@@ -1,4 +1,4 @@
-use frame::Frame;
+use crate::frame::Frame;
 use std::fmt;
 
 #[derive(Debug)]
@@ -206,7 +206,9 @@ impl QuetzalSave {
 
     fn make_cmem_body(current: &[u8], original: &[u8]) -> Vec<u8> {
         // match each byte of the current and the original
-        current.iter().zip(original.iter())
+        current
+            .iter()
+            .zip(original.iter())
             // XOR current dynamic memory with the original (get what changed)
             .map(|(a, b)| a ^ b)
             // compress result by counting zeros instead of including them all
@@ -233,7 +235,8 @@ impl QuetzalSave {
                 }
 
                 (compressed, zero_count)
-            }).0 // <- compressed is the first field in the tuple
+            })
+            .0 // <- compressed is the first field in the tuple
     }
 
     fn read_stks_body(&mut self, bytes: &[u8]) {

@@ -4,16 +4,16 @@ use std::boxed::Box;
 use std::io;
 use std::io::Write;
 
-use regex::Regex;
 use atty::Stream;
+use regex::Regex;
 use term_size;
 
-use traits::UI;
+use crate::traits::UI;
 
 lazy_static! {
-    static ref ANSI_RE: Regex = Regex::new(
-        r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]"
-    ).unwrap();
+    static ref ANSI_RE: Regex =
+        Regex::new(r"[\x1b\x9b][\[()#;?]*(?:[0-9]{1,4}(?:;[0-9]{0,4})*)?[0-9A-PRZcf-nqry=><]")
+            .unwrap();
 }
 
 #[derive(Debug)]
