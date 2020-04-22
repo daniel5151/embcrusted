@@ -276,7 +276,7 @@ impl QuetzalSave {
 }
 
 impl fmt::Display for QuetzalSave {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         writeln!(
             f,
             "PC: {:#04x} Chksum: {:#04x} Mem Length: {}",

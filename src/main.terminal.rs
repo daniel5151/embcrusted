@@ -1,19 +1,4 @@
-extern crate atty;
-extern crate base64;
-extern crate clap;
-extern crate rand;
-extern crate regex;
-extern crate serde_json;
-extern crate term_size;
-
-#[macro_use]
-extern crate lazy_static;
-
-#[macro_use]
-extern crate enum_primitive;
-
-#[macro_use]
-extern crate serde_derive;
+#![deny(rust_2018_idioms)]
 
 use std::fs::File;
 use std::io::prelude::*;

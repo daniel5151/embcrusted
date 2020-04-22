@@ -102,14 +102,14 @@ impl Buffer {
         &self.buf[start..end]
     }
 
-    pub fn get_reader(&self, cursor: usize) -> Reader {
+    pub fn get_reader(&self, cursor: usize) -> Reader<'_> {
         Reader {
             buffer: self,
             cursor,
         }
     }
 
-    pub fn get_writer(&mut self, cursor: usize) -> Writer {
+    pub fn get_writer(&mut self, cursor: usize) -> Writer<'_> {
         Writer {
             buffer: self,
             cursor,

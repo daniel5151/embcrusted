@@ -13,6 +13,7 @@ use base64;
 use enum_primitive::FromPrimitive;
 use rand;
 use rand::{Rng, SeedableRng};
+use serde_derive::Serialize;
 use serde_json;
 
 use crate::buffer::Buffer;
@@ -98,7 +99,7 @@ impl Object {
 }
 
 impl fmt::Display for Object {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }

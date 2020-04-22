@@ -5,6 +5,7 @@ use std::io;
 use std::io::Write;
 
 use atty::Stream;
+use lazy_static::lazy_static;
 use regex::Regex;
 use term_size;
 

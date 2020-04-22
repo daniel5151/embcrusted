@@ -1,6 +1,8 @@
 use std::fmt;
 use std::hash;
 
+use enum_primitive::*;
+
 enum_from_primitive! {
     #[allow(non_camel_case_types)]
     #[derive(Clone, Copy, Debug, PartialEq)]
@@ -79,7 +81,7 @@ pub enum Operand {
 }
 
 impl fmt::Display for Operand {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Operand::Small(x) => write!(f, "#{:02x}", x),
             Operand::Large(x) => write!(f, "{:04x}", x),
@@ -361,7 +363,7 @@ impl PartialEq for Instruction {
 impl Eq for Instruction {}
 
 impl fmt::Display for Instruction {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{:5x}: {:16}", self.addr, self.name)?;
 
         for op in &self.operands {
