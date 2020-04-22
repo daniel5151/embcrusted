@@ -1,5 +1,7 @@
-use std::fmt;
-use std::hash;
+use alloc::string::{String, ToString};
+use alloc::vec::Vec;
+use core::fmt;
+use core::hash;
 
 #[allow(non_camel_case_types)]
 #[repr(u16)]

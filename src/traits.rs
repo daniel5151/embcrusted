@@ -1,3 +1,6 @@
+use alloc::boxed::Box;
+use alloc::string::String;
+
 pub trait UI {
     fn new() -> Box<Self>
     where

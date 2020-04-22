@@ -12,5 +12,8 @@ edition = "2018"
 lto = true
 opt-level = 's'
 
+[dependencies]
+hashbrown = "0.7.1"
+
 [workspace]
 members = ["encrusted-term-ui"]

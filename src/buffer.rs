@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
+use alloc::vec::Vec;
+
 #[derive(Debug)]
+
 pub struct Reader<'a> {
     buffer: &'a Buffer,
     cursor: usize,

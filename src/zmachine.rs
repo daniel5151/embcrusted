@@ -1,10 +1,12 @@
-use std::boxed::Box;
-use std::collections::{HashMap, HashSet};
-use std::env;
-use std::fmt;
-use std::fmt::Write as FmtWrite;
-use std::process;
-use std::str;
+use alloc::boxed::Box;
+use alloc::format;
+use alloc::string::{String, ToString};
+use alloc::vec;
+use alloc::vec::Vec;
+use core::fmt::{self, Write};
+use core::str;
+
+use hashbrown::{HashMap, HashSet};
 
 use crate::buffer::Buffer;
 use crate::frame::Frame;
@@ -1176,10 +1178,6 @@ impl Zmachine {
         // ~mutably~ gets the arguments (might pop stack)
         let args = self.get_arguments(instr.operands.as_slice());
 
-        if env::var("DEBUG").is_ok() {
-            println!("\x1B[97m{}\x1B[0m", instr);
-        }
-
         // Match instructions that return values for storing or branching (or both)
         // `result` is an option. either a matched instruction or none (no match)
         let result = match (instr.opcode, &args[..]) {
@@ -1345,7 +1343,6 @@ impl Zmachine {
             $have_prop num      (list objects that have given property) \n\
             $teleport num/name  (teleport to a room) \n\
             $steal num/name     (takes any item) \n\
-            $quit
         ",
         );
     }
@@ -1374,7 +1371,6 @@ impl Zmachine {
             "$have_prop" => self.debug_have_property(arg),
             "$steal" => self.debug_steal(arg),
             "$teleport" => self.debug_teleport(arg),
-            "$quit" => process::exit(0),
             // unrecognized commands should ask for user input again
             _ => {
                 should_ask_again = false;
