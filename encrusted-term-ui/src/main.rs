@@ -39,19 +39,6 @@ fn main() {
     let mut file = File::open(path).expect("Error opening file");
     file.read_to_end(&mut data).expect("Error reading file");
 
-    let version = data[0];
-
-    if version == 0 || version > 8 {
-        println!(
-            "\n\
-             \"{}\" has an nsupported game version: {}\n\
-             Is this a valid game file?\n",
-            path.to_string_lossy(),
-            version
-        );
-        process::exit(1);
-    }
-
     let ui = TerminalUI::new();
 
     let mut opts = Options::default();
@@ -59,7 +46,7 @@ fn main() {
     let rand32 = || rand::random();
     opts.rand_seed = [rand32(), rand32(), rand32(), rand32()];
 
-    let mut zvm = Zmachine::new(data, ui, opts);
+    let mut zvm = Zmachine::new(data, ui, opts).expect("could not construct z-machine");
 
     zvm.run();
 }

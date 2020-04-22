@@ -140,11 +140,20 @@ pub struct Zmachine {
     rng: rand::XorShiftRng,
 }
 
+#[derive(Debug)]
+pub enum Error {
+    InvalidVersion,
+}
+
 impl Zmachine {
-    pub fn new(data: Vec<u8>, ui: Box<dyn UI>, options: Options) -> Zmachine {
+    pub fn new(data: Vec<u8>, ui: Box<dyn UI>, options: Options) -> Result<Zmachine, Error> {
         let memory = Buffer::new(data);
 
         let version = memory.read_byte(0x00);
+        if version == 0 || version > 8 {
+            return Err(Error::InvalidVersion);
+        }
+
         let initial_pc = memory.read_word(0x06) as usize;
         let prop_defaults = memory.read_word(0x0A) as usize;
         let static_start = memory.read_word(0x0E) as usize;
@@ -182,7 +191,7 @@ impl Zmachine {
         // read into dictionary & word separators
         zvm.populate_dictionary();
 
-        zvm
+        Ok(zvm)
     }
 
     #[allow(dead_code)]
