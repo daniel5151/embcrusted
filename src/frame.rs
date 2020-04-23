@@ -71,8 +71,10 @@ impl Frame {
     pub fn stack_peek(&self) -> u16 {
         *self.stack.last().expect("Can't peek on an empty stack!")
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl fmt::Display for Frame {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let stringify = |values: &Vec<u16>| {
             let mut out = String::from("[");
 
@@ -87,18 +89,13 @@ impl Frame {
             out
         };
 
-        format!(
+        write!(
+            f,
             "Locals: {} Stack: {} -> {:?} @ {:04x}",
             &stringify(&self.locals),
             &stringify(&self.stack),
             self.store,
             self.resume
         )
-    }
-}
-
-impl fmt::Display for Frame {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
     }
 }

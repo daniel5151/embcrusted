@@ -1,4 +1,3 @@
-use alloc::boxed::Box;
 use alloc::format;
 use alloc::string::{String, ToString};
 use alloc::vec;
@@ -31,11 +30,11 @@ enum ZStringState {
 pub struct Object {
     number: u16,
     name: String,
-    children: Vec<Box<Object>>,
+    children: Vec<Object>,
 }
 
 impl Object {
-    fn new<U: UI>(number: u16, zvm: &Zmachine<U>) -> Box<Object> {
+    fn new<U: UI>(number: u16, zvm: &Zmachine<U>) -> Object {
         let mut name = if number > 0 {
             zvm.get_object_name(number)
         } else {
@@ -46,11 +45,11 @@ impl Object {
             name += "(No Name)";
         }
 
-        Box::new(Object {
+        Object {
             number,
             name,
             children: Vec::new(),
-        })
+        }
     }
 
     fn print_tree(&self, indent: &str, mut depth: u8, is_last: bool) -> String {
@@ -75,24 +74,20 @@ impl Object {
 
         for (i, child) in self.children.iter().enumerate() {
             let is_last_child = i == self.children.len() - 1;
-            out += &(**child).print_tree(&next, depth, is_last_child);
+            out += &(*child).print_tree(&next, depth, is_last_child);
         }
 
         out
-    }
-
-    fn to_string(&self) -> String {
-        if !self.children.is_empty() {
-            self.print_tree("", 0, false)
-        } else {
-            format!("{} ({})", self.name, self.number)
-        }
     }
 }
 
 impl fmt::Display for Object {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "{}", self.to_string())
+        if !self.children.is_empty() {
+            write!(f, "{}", self.print_tree("", 0, false))
+        } else {
+            write!(f, "{} ({})", self.name, self.number)
+        }
     }
 }
 
@@ -205,7 +200,7 @@ impl<U: UI> Zmachine<U> {
         (sum % 0x1_0000) as u16
     }
 
-    fn to_alphabet_entry(s: &str) -> Vec<String> {
+    fn convert_to_alphabet_entry(s: &str) -> Vec<String> {
         s.chars().map(|c| c.to_string()).collect()
     }
 
@@ -216,9 +211,9 @@ impl<U: UI> Zmachine<U> {
         let A2 = " ......\n0123456789.,!?_#'\"/\\-:()";
 
         [
-            Self::to_alphabet_entry(A0),
-            Self::to_alphabet_entry(A1),
-            Self::to_alphabet_entry(A2),
+            Self::convert_to_alphabet_entry(A0),
+            Self::convert_to_alphabet_entry(A1),
+            Self::convert_to_alphabet_entry(A2),
         ]
     }
 
@@ -246,9 +241,9 @@ impl<U: UI> Zmachine<U> {
             );
 
             [
-                Self::to_alphabet_entry(&A0),
-                Self::to_alphabet_entry(&A1),
-                Self::to_alphabet_entry(&A2),
+                Self::convert_to_alphabet_entry(&A0),
+                Self::convert_to_alphabet_entry(&A1),
+                Self::convert_to_alphabet_entry(&A2),
             ]
         }
     }
@@ -755,7 +750,7 @@ impl<U: UI> Zmachine<U> {
             self.add_object_children(&mut *object);
         }
 
-        *root
+        root
     }
 
     fn find_object(&self, name: &str) -> Option<u16> {
@@ -1894,6 +1889,7 @@ impl<U: UI> Zmachine<U> {
     }
 
     // EXT_1002
+    #[allow(clippy::comparison_chain)]
     fn do_log_shift(&mut self, number: u16, places: u16) -> u16 {
         let number = number as u32;
         let places = places as i16;
@@ -1908,6 +1904,7 @@ impl<U: UI> Zmachine<U> {
     }
 
     // EXT_1003
+    #[allow(clippy::comparison_chain)]
     fn do_art_shift(&mut self, number: u16, places: u16) -> u16 {
         let mut number = (number as i16) as i32;
         let places = places as i16;
