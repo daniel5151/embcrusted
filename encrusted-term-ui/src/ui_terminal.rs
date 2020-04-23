@@ -1,6 +1,5 @@
 #![allow(dead_code)]
 
-use std::boxed::Box;
 use std::io;
 use std::io::Write;
 
@@ -25,6 +24,22 @@ pub struct TerminalUI {
 }
 
 impl TerminalUI {
+    pub fn new() -> TerminalUI {
+        if let Some((w, _)) = term_size::dimensions() {
+            TerminalUI {
+                isatty: atty::is(Stream::Stdout),
+                width: w,
+                x_position: 0,
+            }
+        } else {
+            TerminalUI {
+                isatty: false,
+                width: 0,
+                x_position: 0,
+            }
+        }
+    }
+
     fn print_raw(&self, raw: &str) {
         print!("{}", raw);
         io::stdout().flush().unwrap();
@@ -48,22 +63,6 @@ impl TerminalUI {
 }
 
 impl UI for TerminalUI {
-    fn new() -> Box<TerminalUI> {
-        if let Some((w, _)) = term_size::dimensions() {
-            Box::new(TerminalUI {
-                isatty: atty::is(Stream::Stdout),
-                width: w,
-                x_position: 0,
-            })
-        } else {
-            Box::new(TerminalUI {
-                isatty: false,
-                width: 0,
-                x_position: 0,
-            })
-        }
-    }
-
     fn clear(&self) {
         // Clear screen: ESC [2J
         // Move cursor to 1x1: [H

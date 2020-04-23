@@ -6,7 +6,7 @@ use std::path::Path;
 use std::process;
 
 use clap::{App, Arg};
-use encrusted::{Options, Zmachine, UI};
+use encrusted::{Options, Zmachine};
 
 mod ui_terminal;
 

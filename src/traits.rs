@@ -1,10 +1,6 @@
-use alloc::boxed::Box;
 use alloc::string::String;
 
 pub trait UI {
-    fn new() -> Box<Self>
-    where
-        Self: Sized;
     fn clear(&self);
     fn print(&mut self, text: &str);
     fn debug(&mut self, text: &str);
