@@ -1,5 +1,5 @@
 [package]
-name = "encrusted-term-ui"
+name = "term-ui-std"
 version = "0.1.0"
 authors = ["Daniel Prilik <danielprilik@gmail.com>"]
 edition = "2018"

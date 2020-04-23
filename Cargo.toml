@@ -11,9 +11,15 @@ edition = "2018"
 [profile.release]
 lto = true
 opt-level = 's'
+panic = "abort"
+
+[profile.dev]
+lto = true
+opt-level = 's'
+panic = "abort" # avoids having to define `eh_personality`
 
 [dependencies]
 hashbrown = "0.7.1"
 
 [workspace]
-members = ["encrusted-term-ui"]
+members = ["term-ui-std", "term-ui-no-std"]

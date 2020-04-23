@@ -1,0 +1,11 @@
+[package]
+name = "term-ui-no-std"
+version = "0.1.0"
+authors = ["Daniel Prilik <danielprilik@gmail.com>"]
+edition = "2018"
+
+[dependencies]
+encrusted = { path = "../" }
+libc = { version = "0.2", default-features = false }
+libc-print = "0.1"
+libc_alloc = "1.0"
